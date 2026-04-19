@@ -37,28 +37,35 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.warning("Invalid interval %s, using default %s", interval, DEFAULT_INTERVAL)
         interval = DEFAULT_INTERVAL
 
+    from .wyze_sync import WyzeClient
+    wyze_client = WyzeClient(config)
+
     async def async_update_data():
         try:
             selected = entry.options.get("devices", [])
             _LOGGER.debug("Fetching data for selected devices: %s", selected)
-            result = await asyncio.to_thread(_fetch_data, config, selected)
+            result = await asyncio.to_thread(_fetch_data, wyze_client, selected)
             _LOGGER.debug("Fetched %d devices", len(result))
             return result
         except Exception as err:
+            error_msg = str(err)
+            if "rate limited" in error_msg.lower() or "429" in error_msg:
+                _LOGGER.warning("Wyze API rate limited, will retry next interval")
+                return coordinator.data
             _LOGGER.error("Error fetching data: %s", err, exc_info=True)
             raise UpdateFailed(f"API Error: {err}") from err
 
     coord = DataUpdateCoordinator(hass, _LOGGER, name=DOMAIN, update_method=async_update_data, update_interval=timedelta(seconds=interval))
+    coord.wyze_client = wyze_client
     await coord.async_config_entry_first_refresh()
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coord
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     return True
 
-def _fetch_data(config: dict, selected_macs: list) -> dict:
+def _fetch_data(wyze_client, selected_macs: list) -> dict:
     _LOGGER.debug("_fetch_data called with selected_macs: %s", selected_macs)
-    from .wyze_sync import WyzeClient
-    devices = WyzeClient(config).get_full_state()
+    devices = wyze_client.get_full_state()
     _LOGGER.debug("WyzeClient returned %d devices", len(devices))
     for mac, data in devices.items():
         _LOGGER.debug("Device MAC: %s, Name: %s, Model: %s", mac, data.get("name"), data.get("product_model"))

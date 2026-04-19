@@ -30,6 +30,9 @@ async def async_setup_entry(hass, entry, async_add_entities):
             mac = ent.unique_id.replace("_motion", "")
             if mac not in selected:
                 entity_registry.async_remove(ent.entity_id)
+                device = device_registry.async_get_device(identifiers={(DOMAIN, mac)})
+                if device:
+                    device_registry.async_remove_device(device.id)
 
     for mac, data in coordinator.data.items():
         name = data.get("name")
