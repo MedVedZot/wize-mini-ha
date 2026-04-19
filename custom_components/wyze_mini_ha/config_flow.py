@@ -12,7 +12,6 @@ _LOGGER = logging.getLogger(__name__)
 async def validate_auth(hass, data):
     client = WyzeClient(hass, data)
     try:
-        # Для валидации и получения списка при добавлении
         return await client.get_full_state()
     except Exception as err:
         _LOGGER.error("Auth validation error: %s", err)
@@ -61,7 +60,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         client = WyzeClient(self.hass, self._data)
         try:
-            # Свежий список камер для выбора
             states = await client.get_full_state()
         except Exception:
             states = {}
@@ -88,10 +86,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         errors = {}
-        # Создаем временный клиент специально для этого захода в настройки
         client = WyzeClient(self.hass, self.entry.data)
         try:
-            # ДИНАМИКА: запрашиваем список устройств из облака прямо сейчас
             display_devices = await client.get_full_state()
         except Exception as err:
             _LOGGER.error("Error updating devices in options: %s", err)

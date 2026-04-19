@@ -44,7 +44,6 @@ class WyzeClient:
         events = []
         if all_macs:
             try:
-                # Быстрый опрос событий (10 сек окно)
                 events = await client.get_event_list(all_macs, begin_time_ms=now_ms-10000, count=20)
             except: pass
 
@@ -53,7 +52,6 @@ class WyzeClient:
             model = dev.get("product_model")
             if not mac: continue
             
-            # Заполняем кэш для Device Info один раз
             if mac not in self._info_cache:
                 try:
                     info = await client.get_device_info(mac, model)
@@ -61,7 +59,6 @@ class WyzeClient:
                 except:
                     self._info_cache[mac] = "Unknown"
 
-            # Motion: статус 13
             motion = any(e.get("device_id") == mac and e.get("event_value") == "13" for e in events)
 
             result[mac] = {
