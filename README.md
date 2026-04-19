@@ -10,7 +10,7 @@ No subscriptions. Just support if you find value.
 
 Home Assistant custom integration for Wyze Mini cameras with motion detection via Wyze Cloud API.
 
-![Version](https://img.shields.io/badge/version-1.1.0-blue)
+![Version](https://img.shields.io/badge/version-1.1.1-blue)
 ![Home Assistant](https://img.shields.io/badge/HA-2024.1.0%2B-green)
 ![License](https://img.shields.io/badge/license-MIT-orange)
 
