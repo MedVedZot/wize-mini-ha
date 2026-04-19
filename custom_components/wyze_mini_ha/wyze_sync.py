@@ -3,9 +3,11 @@ import asyncio
 import sys
 import os
 import logging
+import weakref
 
 _LOGGER = logging.getLogger(__name__)
 
+_sessions = weakref.WeakSet()
 
 class WyzeClient:
     def __init__(self, config):
@@ -27,6 +29,7 @@ class WyzeClient:
             
             async def _create():
                 self._session = aiohttp.ClientSession()
+                _sessions.add(self._session)
                 self._client = WyzeApiClient(
                     self._session,
                     email=self._config["email"],
@@ -37,7 +40,12 @@ class WyzeClient:
                 await self._client.login()
             
             loop = self._get_loop()
-            loop.run_until_complete(_create())
+            try:
+                loop.run_until_complete(_create())
+            except Exception as e:
+                if self._session and not self._session.closed:
+                    loop.run_until_complete(self._session.close())
+                raise
         
         return self._client
 
@@ -67,13 +75,26 @@ class WyzeClient:
             return result
         
         loop = self._get_loop()
-        return loop.run_until_complete(_get())
+        try:
+            return loop.run_until_complete(_get())
+        finally:
+            self._cleanup()
 
     def close(self):
-        if self._session:
+        self._cleanup()
+
+    def _cleanup(self):
+        if self._session and not self._session.closed:
             async def _close():
-                await self._session.close()
+                try:
+                    await self._session.close()
+                except Exception as e:
+                    _LOGGER.error("Error closing session: %s", e)
             loop = self._get_loop()
-            loop.run_until_complete(_close())
-            self._session = None
-            self._client = None
+            try:
+                loop.run_until_complete(_close())
+            except Exception as e:
+                _LOGGER.error("Error in cleanup: %s", e)
+            finally:
+                self._session = None
+                self._client = None

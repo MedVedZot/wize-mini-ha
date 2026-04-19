@@ -101,13 +101,16 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             selected = []
+            label_to_mac = {}
+            for mac, data in sorted(states.items()):
+                name = data.get("name", mac)
+                model = data.get("product_model", "")
+                label = f"{name} ({model})"
+                label_to_mac[label] = mac
+            
             for k, v in user_input.items():
-                if v:
-                    if "(" in k:
-                        device_key = k.split(" (")[0]
-                    else:
-                        device_key = k
-                    selected.append(device_key)
+                if v and k in label_to_mac:
+                    selected.append(label_to_mac[k])
             _LOGGER.info("User selected %d devices: %s", len(selected), selected)
             
             if not selected:
@@ -133,6 +136,18 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         self.entry = entry
 
     async def async_step_init(self, user_input=None):
+        coordinator = self.hass.data.get(DOMAIN, {}).get(self.entry.entry_id)
+        current_devices = self.entry.options.get("devices", [])
+        current_interval = self.entry.options.get(CONF_INTERVAL, DEFAULT_INTERVAL)
+
+        display_devices = {}
+        try:
+            if coordinator and hasattr(coordinator, 'data') and coordinator.data:
+                display_devices = coordinator.data
+        except Exception as err:
+            _LOGGER.error("Error getting devices for options: %s", err)
+            display_devices = {}
+
         errors = {}
         if user_input is not None:
             new_data = dict(self.entry.data)
@@ -149,14 +164,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                 CONF_API_KEY: api_key
             }
             
+            label_to_mac = {}
+            for mac, data in sorted(display_devices.items()):
+                name = data.get("name", mac)
+                model = data.get("product_model", "")
+                label = f"{name} ({model})"
+                label_to_mac[label] = mac
+            
             selected = []
             for k, v in user_input.items():
-                if v and k not in {CONF_PASSWORD, CONF_KEY_ID, CONF_API_KEY, CONF_INTERVAL}:
-                    if "(" in k:
-                        device_key = k.split(" (")[0]
-                    else:
-                        device_key = k
-                    selected.append(device_key)
+                if v and k not in {CONF_PASSWORD, CONF_KEY_ID, CONF_API_KEY, CONF_INTERVAL} and k in label_to_mac:
+                    selected.append(label_to_mac[k])
             
             if not selected:
                 errors["base"] = "no_devices_selected"
@@ -190,24 +208,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     else:
                         errors["base"] = "cannot_connect"
 
-        coordinator = self.hass.data.get(DOMAIN, {}).get(self.entry.entry_id)
-        current_devices = self.entry.options.get("devices", [])
-        current_interval = self.entry.options.get(CONF_INTERVAL, DEFAULT_INTERVAL)
-
         schema_dict = {
             vol.Optional(CONF_PASSWORD): str,
             vol.Optional(CONF_KEY_ID): str,
             vol.Optional(CONF_API_KEY): str,
             vol.Required(CONF_INTERVAL, default=current_interval): cv.positive_int,
         }
-
-        display_devices = {}
-        try:
-            if coordinator and hasattr(coordinator, 'data') and coordinator.data:
-                display_devices = coordinator.data
-        except Exception as err:
-            _LOGGER.error("Error getting devices for options: %s", err)
-            display_devices = {}
 
         for mac, data in sorted(display_devices.items()):
             name = data.get("name", mac)
