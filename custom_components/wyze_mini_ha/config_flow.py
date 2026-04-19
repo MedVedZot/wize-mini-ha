@@ -1,5 +1,6 @@
 """Config flow for Wyze Mini HA."""
 import asyncio
+import logging
 import voluptuous as vol
 import homeassistant.helpers.config_validation as cv
 from homeassistant import config_entries
@@ -8,13 +9,19 @@ from homeassistant.data_entry_flow import AbortFlow
 
 from . import CONF_INTERVAL, DEFAULT_INTERVAL, DOMAIN, CONF_KEY_ID, CONF_API_KEY
 
+_LOGGER = logging.getLogger(__name__)
+
 def _get_client(data):
     from .wyze_sync import WyzeClient
     return WyzeClient(data)
 
 async def validate_auth(data):
     def _validate():
-        return _get_client(data).get_full_state()
+        try:
+            return _get_client(data).get_full_state()
+        except Exception as err:
+            _LOGGER.error("Auth validation error: %s", err)
+            raise
     return await asyncio.to_thread(_validate)
 
 class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -28,14 +35,18 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         if user_input:
             try:
-                await validate_auth(user_input)
-                await self.async_set_unique_id(user_input[CONF_EMAIL].lower())
-                self._abort_if_unique_id_configured()
-                self._data = user_input
-                return await self.async_step_devices()
+                devices = await validate_auth(user_input)
+                if not devices:
+                    errors["base"] = "no_devices"
+                else:
+                    await self.async_set_unique_id(user_input[CONF_EMAIL].lower())
+                    self._abort_if_unique_id_configured()
+                    self._data = user_input
+                    return await self.async_step_devices()
             except AbortFlow:
                 raise
             except Exception as err:
+                _LOGGER.error("User step error: %s", err)
                 if "401" in str(err) or "unauthorized" in str(err).lower():
                     errors["base"] = "invalid_auth"
                 else:
@@ -61,6 +72,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except AbortFlow:
                 raise
             except Exception as err:
+                _LOGGER.error("Reconfigure error: %s", err)
                 if "401" in str(err) or "unauthorized" in str(err).lower():
                     errors["base"] = "invalid_auth"
                 else:
@@ -80,7 +92,8 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         try:
             states = await asyncio.to_thread(lambda: _get_client(self._data).get_full_state())
-        except Exception:
+        except Exception as err:
+            _LOGGER.error("Devices step error: %s", err)
             states = {}
 
         if user_input is not None:
@@ -167,6 +180,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
                     self.hass.config_entries.async_update_entry(self.entry, data=new_data)
                     return self.async_create_entry(title="", data=new_options)
                 except Exception as err:
+                    _LOGGER.error("Options init error: %s", err)
                     if "401" in str(err) or "unauthorized" in str(err).lower():
                         errors["base"] = "invalid_auth"
                     else:
@@ -187,7 +201,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         try:
             if coordinator and hasattr(coordinator, 'data') and coordinator.data:
                 display_devices = coordinator.data
-        except Exception:
+        except Exception as err:
+            _LOGGER.error("Error getting devices for options: %s", err)
             display_devices = {}
 
         for mac, data in sorted(display_devices.items()):

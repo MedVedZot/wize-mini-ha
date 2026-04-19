@@ -1,5 +1,7 @@
 """Synchronous wrapper for WyzeApiClient."""
 import asyncio
+import sys
+import os
 
 
 class WyzeClient:
@@ -17,9 +19,10 @@ class WyzeClient:
 
     def _ensure_client(self):
         if self._client is None:
-            import sys
-            sys.path.insert(0, "/Users/user/Desktop/PROJECTS/WYZE_MINI_HA/custom_components")
-            from wyze_api import WyzeApiClient, WyzeAuthError
+            parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            if parent_dir not in sys.path:
+                sys.path.append(parent_dir)
+            from wyze_api import WyzeApiClient
             import aiohttp
             
             async def _create():

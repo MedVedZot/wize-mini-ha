@@ -94,3 +94,6 @@ Pipfile.lock
 *.tmp
 *.bak
 *.backup
+
+# Test files with credentials
+test_auth.py
