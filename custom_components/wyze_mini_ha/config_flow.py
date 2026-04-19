@@ -12,6 +12,7 @@ _LOGGER = logging.getLogger(__name__)
 async def validate_auth(hass, data):
     client = WyzeClient(hass, data)
     try:
+        # Для валидации и получения списка при добавлении
         return await client.get_full_state()
     except Exception as err:
         _LOGGER.error("Auth validation error: %s", err)
@@ -33,7 +34,6 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                 _LOGGER.info("Validating auth for email: %s", user_input[CONF_EMAIL])
                 devices = await validate_auth(self.hass, user_input)
-                _LOGGER.info("Auth validation successful, got %d devices", len(devices))
                 
                 if not devices:
                     errors["base"] = "no_devices"
@@ -44,10 +44,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 raise
             except Exception as err:
                 _LOGGER.error("User step error: %s", err)
-                if "401" in str(err) or "unauthorized" in str(err).lower():
-                    errors["base"] = "invalid_auth"
-                else:
-                    errors["base"] = "cannot_connect"
+                errors["base"] = "invalid_auth" if "401" in str(err) else "cannot_connect"
         
         return self.async_show_form(
             step_id="user",
@@ -64,16 +61,14 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         client = WyzeClient(self.hass, self._data)
         try:
+            # Свежий список камер для выбора
             states = await client.get_full_state()
-            _LOGGER.debug("Devices step: fetched %d devices", len(states))
-        except Exception as err:
-            _LOGGER.error("Devices step error: %s", err)
+        except Exception:
             states = {}
 
         if user_input is not None:
             label_to_mac = {f"{d.get('name', m)} ({d.get('product_model', '')})": m for m, d in states.items()}
             selected = [label_to_mac[k] for k, v in user_input.items() if v and k in label_to_mac]
-            _LOGGER.info("User selected %d devices: %s", len(selected), selected)
             
             if not selected:
                 errors["base"] = "no_devices_selected"
@@ -84,7 +79,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     options={"devices": selected, CONF_INTERVAL: DEFAULT_INTERVAL}
                 )
 
-        schema_dict = {vol.Optional(f"{d.get('name', m)} ({d.get('product_model', '')})", default=False): bool for m, d in sorted(states.items())}
+        schema_dict = {vol.Optional(f"{d.get('name', m)} ({d.get('product_model', '')})", default=True): bool for m, d in sorted(states.items())}
         return self.async_show_form(step_id="devices", data_schema=vol.Schema(schema_dict), errors=errors)
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
@@ -93,15 +88,17 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         errors = {}
-        current_devices = self.entry.options.get("devices", [])
-        current_interval = self.entry.options.get(CONF_INTERVAL, DEFAULT_INTERVAL)
-        
+        # Создаем временный клиент специально для этого захода в настройки
         client = WyzeClient(self.hass, self.entry.data)
         try:
+            # ДИНАМИКА: запрашиваем список устройств из облака прямо сейчас
             display_devices = await client.get_full_state()
         except Exception as err:
-            _LOGGER.error("Error getting devices for options: %s", err)
+            _LOGGER.error("Error updating devices in options: %s", err)
             display_devices = {}
+
+        current_devices = self.entry.options.get("devices", [])
+        current_interval = self.entry.options.get(CONF_INTERVAL, DEFAULT_INTERVAL)
 
         if user_input is not None:
             new_data = dict(self.entry.data)
@@ -133,6 +130,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         
         for mac, data in sorted(display_devices.items()):
             label = f"{data.get('name', mac)} ({data.get('product_model', '')})"
+            # Показываем галочку, если мак уже был сохранен ранее
             schema[vol.Optional(label, default=mac in current_devices)] = bool
 
         return self.async_show_form(step_id="init", data_schema=vol.Schema(schema), errors=errors)
