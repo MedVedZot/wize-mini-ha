@@ -1,5 +1,5 @@
 [project]
-name = "wyze-mini-ha"
+name = "wize-mini-ha"
 version = "1.0.0"
 description = "Home Assistant custom integration for Wyze Mini cameras with motion detection"
 readme = "README.md"
@@ -30,10 +30,10 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/MedVedZot/wyze-mini-ha"
-Documentation = "https://github.com/MedVedZot/wyze-mini-ha"
-Repository = "https://github.com/MedVedZot/wyze-mini-ha.git"
-Issues = "https://github.com/MedVedZot/wyze-mini-ha/issues"
+Homepage = "https://github.com/MedVedZot/wize-mini-ha"
+Documentation = "https://github.com/MedVedZot/wize-mini-ha"
+Repository = "https://github.com/MedVedZot/wize-mini-ha.git"
+Issues = "https://github.com/MedVedZot/wize-mini-ha/issues"
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
