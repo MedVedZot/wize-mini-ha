@@ -1,0 +1,57 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Conectar con Wyze",
+        "description": "Introduce los datos de tu cuenta Wyze.",
+        "data": {
+          "email": "Correo electronico",
+          "password": "Contrasena",
+          "key_id": "Key ID",
+          "api_key": "API Key"
+        }
+      },
+      "devices": {
+        "title": "Seleccionar Dispositivos",
+        "description": "Selecciona las camaras que quieres agregar a Home Assistant.",
+        "data": {}
+      },
+      "reconfigure": {
+        "title": "Reconfigurar",
+        "description": "Actualiza tus credenciales de cuenta Wyze.",
+        "data": {
+          "email": "Correo electronico",
+          "password": "Contrasena",
+          "key_id": "Key ID",
+          "api_key": "API Key"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Autenticacion invalida",
+      "cannot_connect": "Fallo al conectar",
+      "no_devices_selected": "Por favor selecciona al menos un dispositivo"
+    },
+    "abort": {
+      "already_configured": "La cuenta ya esta configurada"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Opciones",
+        "data": {
+          "password": "Contrasena",
+          "key_id": "Key ID",
+          "api_key": "API Key",
+          "update_interval": "Intervalo de actualizacion (segundos)"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Autenticacion invalida",
+      "cannot_connect": "Fallo al conectar",
+      "no_devices_selected": "Por favor selecciona al menos un dispositivo"
+    }
+  }
+}
