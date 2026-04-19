@@ -2,11 +2,7 @@
 import logging
 import re
 
-from homeassistant.components.sensor import (
-    SensorDeviceClass,
-    SensorEntity,
-    SensorStateClass,
-)
+from homeassistant.components.sensor import SensorEntity
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -91,7 +87,6 @@ class WyzeMotionSensor(CoordinatorEntity, SensorEntity):
         device_data = coordinator.data.get(mac, {})
         self._attr_unique_id = f"{mac}_motion"
         self._attr_native_unit_of_measurement = None
-        self._attr_device_class = SensorDeviceClass.MOTION
         self._attr_state_class = None
         self._attr_icon = "mdi:motion-sensor"
         self._attr_has_entity_name = True
