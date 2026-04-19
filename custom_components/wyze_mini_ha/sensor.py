@@ -20,8 +20,10 @@ _LOGGER = logging.getLogger(__name__)
 DEVICE_INFO_FIELDS = {"mac", "name", "product_model", "local_ip"}
 
 async def async_setup_entry(hass, entry, async_add_entities):
+    _LOGGER.info("Setting up sensors for entry %s", entry.entry_id)
     coordinator = hass.data[DOMAIN][entry.entry_id]
     selected = entry.options.get("devices", [])
+    _LOGGER.debug("Selected devices from options: %s", selected)
     device_registry = dr.async_get(hass)
     entity_registry = er.async_get(hass)
 
@@ -73,10 +75,13 @@ async def async_setup_entry(hass, entry, async_add_entities):
             except ValueError as e:
                 _LOGGER.debug("Could not update entity ID %s to %s: %s", entity_entry.entity_id, expected_entity_id, e)
 
+    _LOGGER.debug("Coordinator data has %d devices", len(coordinator.data))
     entities = []
     for mac, device_data in coordinator.data.items():
+        _LOGGER.debug("Processing device MAC: %s, Selected: %s", mac, mac in selected)
         if mac in selected:
             entities.append(WyzeMotionSensor(coordinator, mac))
+    _LOGGER.info("Creating %d motion sensors", len(entities))
     async_add_entities(entities)
 
 class WyzeMotionSensor(CoordinatorEntity, SensorEntity):

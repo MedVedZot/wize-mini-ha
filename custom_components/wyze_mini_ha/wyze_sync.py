@@ -2,6 +2,9 @@
 import asyncio
 import sys
 import os
+import logging
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class WyzeClient:
@@ -39,15 +42,19 @@ class WyzeClient:
         return self._client
 
     def get_full_state(self):
+        _LOGGER.debug("get_full_state called")
         client = self._ensure_client()
         
         async def _get():
             devices = await client.get_devices()
+            _LOGGER.debug("API returned %d devices", len(devices))
             result = {}
             for dev in devices:
                 mac = dev.get("mac")
                 if not mac:
+                    _LOGGER.warning("Device without MAC: %s", dev)
                     continue
+                _LOGGER.debug("Processing device MAC: %s, Name: %s", mac, dev.get("nickname"))
                 result[mac] = {
                     "device_id": mac,
                     "name": dev.get("nickname"),
@@ -56,6 +63,7 @@ class WyzeClient:
                     "mac": mac,
                     "motion_detected": False
                 }
+            _LOGGER.info("Returning %d devices with MACs: %s", len(result), list(result.keys()))
             return result
         
         loop = self._get_loop()

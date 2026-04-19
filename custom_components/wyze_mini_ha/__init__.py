@@ -17,6 +17,7 @@ CONF_API_KEY = "api_key"
 DEFAULT_INTERVAL = 3
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    _LOGGER.info("Setting up Wyze Mini HA integration for entry %s", entry.entry_id)
     config = {
         "email": entry.data[CONF_EMAIL],
         "password": entry.data[CONF_PASSWORD],
@@ -24,6 +25,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "api_key": entry.data.get(CONF_API_KEY)
     }
     interval = entry.options.get(CONF_INTERVAL, DEFAULT_INTERVAL)
+    _LOGGER.debug("Update interval: %s seconds", interval)
     
     try:
         interval = int(interval)
@@ -37,8 +39,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     async def async_update_data():
         try:
-            return await asyncio.to_thread(_fetch_data, config, entry.options.get("devices", []))
+            selected = entry.options.get("devices", [])
+            _LOGGER.debug("Fetching data for selected devices: %s", selected)
+            result = await asyncio.to_thread(_fetch_data, config, selected)
+            _LOGGER.debug("Fetched %d devices", len(result))
+            return result
         except Exception as err:
+            _LOGGER.error("Error fetching data: %s", err, exc_info=True)
             raise UpdateFailed(f"API Error: {err}") from err
 
     coord = DataUpdateCoordinator(hass, _LOGGER, name=DOMAIN, update_method=async_update_data, update_interval=timedelta(seconds=interval))
@@ -49,13 +56,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 def _fetch_data(config: dict, selected_macs: list) -> dict:
+    _LOGGER.debug("_fetch_data called with selected_macs: %s", selected_macs)
     from .wyze_sync import WyzeClient
     devices = WyzeClient(config).get_full_state()
+    _LOGGER.debug("WyzeClient returned %d devices", len(devices))
+    for mac, data in devices.items():
+        _LOGGER.debug("Device MAC: %s, Name: %s, Model: %s", mac, data.get("name"), data.get("product_model"))
     if not devices:
+        _LOGGER.warning("No devices returned from API")
         return {}
     if not selected_macs:
+        _LOGGER.debug("No selected devices, returning all %d devices", len(devices))
         return devices
-    return {k: v for k, v in devices.items() if k in selected_macs}
+    filtered = {k: v for k, v in devices.items() if k in selected_macs}
+    _LOGGER.debug("Filtered to %d devices from %d selected MACs", len(filtered), len(selected_macs))
+    if not filtered:
+        _LOGGER.error("No devices match selected MACs. Available: %s, Selected: %s", list(devices.keys()), selected_macs)
+    return filtered
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     await hass.config_entries.async_reload(entry.entry_id)

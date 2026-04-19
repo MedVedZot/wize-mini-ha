@@ -35,7 +35,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         if user_input:
             try:
+                _LOGGER.info("Validating auth for email: %s", user_input[CONF_EMAIL])
                 devices = await validate_auth(user_input)
+                _LOGGER.info("Auth validation successful, got %d devices", len(devices))
                 if not devices:
                     errors["base"] = "no_devices"
                 else:
@@ -92,6 +94,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         try:
             states = await asyncio.to_thread(lambda: _get_client(self._data).get_full_state())
+            _LOGGER.debug("Devices step: fetched %d devices", len(states))
         except Exception as err:
             _LOGGER.error("Devices step error: %s", err)
             states = {}
@@ -105,6 +108,7 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     else:
                         device_key = k
                     selected.append(device_key)
+            _LOGGER.info("User selected %d devices: %s", len(selected), selected)
             
             if not selected:
                 errors["base"] = "no_devices_selected"
