@@ -28,18 +28,27 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         if user_input:
             try:
+                await self.async_set_unique_id(user_input[CONF_EMAIL].lower())
+                self._abort_if_unique_id_configured()
+
+                _LOGGER.info("Validating auth for email: %s", user_input[CONF_EMAIL])
                 devices = await validate_auth(self.hass, user_input)
+                _LOGGER.info("Auth validation successful, got %d devices", len(devices))
+                
                 if not devices:
                     errors["base"] = "no_devices"
                 else:
-                    await self.async_set_unique_id(user_input[CONF_EMAIL].lower())
-                    self._abort_if_unique_id_configured()
                     self._data = user_input
                     return await self.async_step_devices()
+            except AbortFlow:
+                raise
             except Exception as err:
                 _LOGGER.error("User step error: %s", err)
-                errors["base"] = "invalid_auth" if "401" in str(err) else "cannot_connect"
-
+                if "401" in str(err) or "unauthorized" in str(err).lower():
+                    errors["base"] = "invalid_auth"
+                else:
+                    errors["base"] = "cannot_connect"
+        
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema({
@@ -56,12 +65,15 @@ class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         client = WyzeClient(self.hass, self._data)
         try:
             states = await client.get_full_state()
-        except Exception:
+            _LOGGER.debug("Devices step: fetched %d devices", len(states))
+        except Exception as err:
+            _LOGGER.error("Devices step error: %s", err)
             states = {}
 
         if user_input is not None:
             label_to_mac = {f"{d.get('name', m)} ({d.get('product_model', '')})": m for m, d in states.items()}
             selected = [label_to_mac[k] for k, v in user_input.items() if v and k in label_to_mac]
+            _LOGGER.info("User selected %d devices: %s", len(selected), selected)
             
             if not selected:
                 errors["base"] = "no_devices_selected"
@@ -87,7 +99,8 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         client = WyzeClient(self.hass, self.entry.data)
         try:
             display_devices = await client.get_full_state()
-        except Exception:
+        except Exception as err:
+            _LOGGER.error("Error getting devices for options: %s", err)
             display_devices = {}
 
         if user_input is not None:
@@ -95,17 +108,20 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             new_options = dict(self.entry.options)
             
             for key in [CONF_PASSWORD, CONF_KEY_ID, CONF_API_KEY]:
-                if val := user_input.pop(key, None):
-                    new_data[key] = val.strip()
+                if val := user_input.get(key):
+                    if val.strip():
+                        new_data[key] = val.strip()
 
-            new_options[CONF_INTERVAL] = user_input.pop(CONF_INTERVAL)
+            new_options[CONF_INTERVAL] = user_input.get(CONF_INTERVAL, current_interval)
+            
             label_to_mac = {f"{d.get('name', m)} ({d.get('product_model', '')})": m for m, d in display_devices.items()}
-            new_options["devices"] = [label_to_mac[k] for k, v in user_input.items() if v and k in label_to_mac]
+            selected = [label_to_mac[k] for k, v in user_input.items() if v and k in label_to_mac]
 
-            if not new_options["devices"]:
+            if not selected and display_devices:
                 errors["base"] = "no_devices_selected"
             else:
                 self.hass.config_entries.async_update_entry(self.entry, data=new_data)
+                new_options["devices"] = selected
                 return self.async_create_entry(title="", data=new_options)
 
         schema = {
@@ -114,6 +130,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             vol.Optional(CONF_API_KEY): str,
             vol.Required(CONF_INTERVAL, default=current_interval): cv.positive_int,
         }
+        
         for mac, data in sorted(display_devices.items()):
             label = f"{data.get('name', mac)} ({data.get('product_model', '')})"
             schema[vol.Optional(label, default=mac in current_devices)] = bool
